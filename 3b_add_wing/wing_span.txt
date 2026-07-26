@@ -1,0 +1,3 @@
+x,y,z in UNITS, CAD frame (+y nose, +x right, +z up) -- root then tip
+0.0,0.02,0.030
+0.0,0.02,0.180

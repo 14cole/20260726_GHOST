@@ -1,0 +1,3 @@
+door,n_arcs,trials,ordered_dBsm,min_dBsm,median_dBsm,max_dBsm,spread_dB
+door_left,3,200,-22.51,-23.75,-23.24,-22.12,1.63
+door_right,3,200,-22.51,-23.75,-23.24,-22.12,1.63
