@@ -31,10 +31,17 @@ WHAT IT DOES
      keeps its phase and can be placed anywhere on any vehicle.  A delta is
      REUSABLE and VEHICLE-INDEPENDENT: solve it once, use it forever.
 
-     Pairing is automatic, from the file names -- every OPN is matched to the
-     FRD with the same base name, so a whole study subtracts unattended and
-     anything unmatched is LISTED rather than quietly dropped.  A lone OPN or
-     FRD is the usual reason a library comes out short.
+     Pairing is automatic from the file names.  An FRD matches an OPN when the
+     study is the same and every FRD parameter has the same value in the OPN.
+     The OPN may carry additional feature-only variables, so one clean baseline
+     can serve many featured cases.  The most-specific compatible FRD wins;
+     equal-specificity ambiguity is refused. Anything unmatched is LISTED.
+
+       SEAL-00-00_0.050bmag_FRD
+         -> SEAL-00-00_0.050bmag_0.010het_0.020crv_OPN
+         -> SEAL-00-00_0.050bmag_0.015het_0.025crv_OPN
+
+     produces two deltas named from the full OPN parameter sets.
 
 INPUTS
   INPUTS knob (below), default ../1b_solve_2d_hpc/results
@@ -259,9 +266,9 @@ def main():
     pairs, unmatched = pair_variants(virtual_joined)
     if not pairs:
         raise SystemExit(
-            "nothing to subtract: no <base>_OPN.grim with a matching "
-            "<base>_FRD.grim.\n  Every variation needs BOTH halves -- check the "
-            "warnings step 1a/1b printed.")
+            "nothing to subtract: no OPN has a compatible FRD baseline.\n"
+            "  A compatible FRD has the same study and a parameter set that "
+            "is a subset of the OPN.")
     expected_deltas = sorted(p["delta_name"] for p in pairs)
     out_dir = os.path.join(HERE, "Deltas")
     os.makedirs(joined_dir, exist_ok=True)
@@ -315,9 +322,9 @@ def main():
         sorted(glob.glob(os.path.join(joined_dir, "*.grim"))))
     if not pairs:
         raise SystemExit(
-            "nothing to subtract: no <base>_OPN.grim with a matching "
-            "<base>_FRD.grim.\n  Every variation needs BOTH halves -- check the "
-            "warnings step 1a/1b printed.")
+            "nothing to subtract: no OPN has a compatible FRD baseline.\n"
+            "  A compatible FRD has the same study and a parameter set that "
+            "is a subset of the OPN.")
     print(f"\nSUBTRACT {len(pairs)} variation(s), OPN - FRD")
     for u in unmatched:
         print(f"         UNMATCHED  {os.path.basename(str(u['path'])):<44} "
@@ -327,7 +334,8 @@ def main():
     for p in pairs:
         out = os.path.join(out_dir, p["delta_name"])
         make_delta_grim(p["clean"], p["featured"], out,
-                        history=(f"step 1c featured - clean, {p['base']}; "
+                        history=(f"step 1c featured - clean, {p['base']} "
+                                 f"using baseline {p['clean_base']}; "
                                  f"build_input_sha256={run_sha256}"))
         pk = peak_amp(out)
         rows.append((p["base"], f"{pk.get('HH', float('nan')):.6e}",
