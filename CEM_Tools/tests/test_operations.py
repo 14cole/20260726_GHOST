@@ -136,6 +136,55 @@ class OperationsTest(unittest.TestCase):
         self.assertEqual([path.name for path in moved.written], ["VV_SEAM.dat"])
         self.assertFalse((source / "VV_SEAL.dat").exists())
 
+    def test_one_frd_baseline_is_reused_for_multiple_opn_cases(self) -> None:
+        opn = self.root / "OPN"
+        frd = self.root / "FRD"
+        opn.mkdir()
+        frd.mkdir()
+        clean = np.asarray([1 + 1j, 2 - 0.5j, -0.2 + 0.8j])
+        cases = (
+            ("0.010het_0.020crv", 0.1 + 0.2j),
+            ("0.015het_0.025crv", 0.3 + 0.1j),
+            ("0.020het_0.020crv", -0.1 + 0.4j),
+        )
+        for polarization in ("TM", "TE"):
+            write_source(
+                frd / (
+                    f"{polarization}_3.000GHz_"
+                    "SEAL-00-00_0.050bmag_FRD.grim"
+                ),
+                3.0, polarization, clean,
+            )
+            for suffix, difference in cases:
+                write_source(
+                    opn / (
+                        f"{polarization}_3.000GHz_SEAL-00-00_0.050bmag_"
+                        f"{suffix}_OPN.grim"
+                    ),
+                    3.0, polarization, clean + difference,
+                )
+        result = subtract_datasets(opn, frd, self.root / "Deltas")
+        self.assertEqual(len(result.written), 3)
+        self.assertFalse(result.warnings)
+        self.assertEqual(
+            {path.name for path in result.written},
+            {
+                f"SEAL-00-00_0.050bmag_{suffix}.grim"
+                for suffix, _difference in cases
+            },
+        )
+        expected = dict(cases)
+        for path in result.written:
+            payload = load_grim(path)
+            suffix = path.stem.split("_", 2)[2]
+            amplitude = payload["rcs_amp_real"] + 1j * payload["rcs_amp_imag"]
+            np.testing.assert_allclose(
+                amplitude,
+                expected[suffix],
+                rtol=0.0,
+                atol=1e-15,
+            )
+
     def test_only_rename_allows_in_place_output(self) -> None:
         opn, _ = self.library()
         with self.assertRaisesRegex(CemToolError, "only Rename Files"):

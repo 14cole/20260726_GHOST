@@ -58,7 +58,9 @@ def default_registry() -> ToolRegistry:
     registry.register(ToolSpec(
         "subtract", "Subtract Datasets",
         "Coherently subtract the FRD (clean) complex far field from the OPN "
-        "(featured) field. Inputs must retain solver raw amplitude arrays.",
+        "(featured) field. One FRD may serve multiple OPN cases when its "
+        "parameters are a compatible subset. Inputs require final _OPN/_FRD "
+        "markers and preserved solver raw amplitude arrays.",
         subtract_datasets,
         (
             FieldSpec("opn_dir", "OPN library", DIR),

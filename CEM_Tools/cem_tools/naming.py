@@ -33,16 +33,16 @@ def is_role_token(token: str) -> bool:
 
 def group_stem(
     path: str | Path,
-    remove: Literal["polarization", "frequency", "design"],
+    remove: Literal["polarization", "frequency", "axes", "design"],
 ) -> str:
     """Return a stable output/group stem after removing selected tokens."""
 
     kept: list[str] = []
     for token in _tokens(path):
         drop = False
-        if remove in {"polarization", "design"}:
+        if remove in {"polarization", "axes", "design"}:
             drop = drop or is_polarization_token(token)
-        if remove in {"frequency", "design"}:
+        if remove in {"frequency", "axes", "design"}:
             drop = drop or is_frequency_token(token)
         if remove == "design":
             drop = drop or is_role_token(token)
@@ -54,4 +54,3 @@ def group_stem(
 def role_neutral_stem(path: str | Path) -> str:
     kept = [token for token in _tokens(path) if not is_role_token(token)]
     return "_".join(kept) or "delta"
-

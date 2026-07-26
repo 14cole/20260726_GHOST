@@ -15,6 +15,7 @@ from .errors import CemToolError
 from .grim_bridge import INPUT_EXTENSIONS, OUTPUT_EXTENSIONS, convert_dataset
 from .grim_native import join_payloads, load_grim, save_grim_atomic, subtract_payloads
 from .naming import group_stem
+from .solver_pairing import pairing_module
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,27 @@ def _join_library_group(paths: list[Path]) -> dict:
     )
 
 
+def _variation_groups(folder: Path, required_role: str) -> dict[str, list[Path]]:
+    pairing = pairing_module()
+    files = _files(folder, (".grim",))
+    if not files:
+        raise CemToolError(f"no .grim files found in {folder}")
+    groups: dict[str, list[Path]] = defaultdict(list)
+    for path in files:
+        variation = group_stem(path, remove="axes")
+        try:
+            _base, role = pairing.parse_variation(variation)
+            pairing.parse_base(variation)
+        except ValueError as exc:
+            raise CemToolError(str(exc)) from exc
+        if role != required_role:
+            raise CemToolError(
+                f"{path.name}: expected final _{required_role} role marker"
+            )
+        groups[variation].append(path)
+    return dict(groups)
+
+
 def _concatenate(
     input_dir: str | os.PathLike[str],
     output_dir: str | os.PathLike[str],
@@ -150,30 +172,42 @@ def subtract_datasets(
     """Coherently subtract OPN - FRD using solver raw far-field amplitudes."""
     opn_path = _directory(opn_dir)
     frd_path = _directory(frd_dir)
-    opn = _group_grim(opn_path, "design")
-    frd = _group_grim(frd_path, "design")
-    if set(opn) != set(frd):
-        missing_frd = sorted(set(opn) - set(frd))
-        missing_opn = sorted(set(frd) - set(opn))
-        raise CemToolError(
-            f"OPN/FRD libraries do not match; missing FRD={missing_frd}, "
-            f"missing OPN={missing_opn}"
-        )
+    opn = _variation_groups(opn_path, "OPN")
+    frd = _variation_groups(frd_path, "FRD")
+    pairing = pairing_module()
+    virtual_root = Path("/CEM_Tools_pairing")
+    virtual_paths = [
+        str(virtual_root / f"{variation}.grim")
+        for variation in sorted(set(opn) | set(frd))
+    ]
+    try:
+        pairs, unmatched = pairing.pair_variants(virtual_paths)
+    except ValueError as exc:
+        raise CemToolError(str(exc)) from exc
+    if not pairs:
+        raise CemToolError("no OPN case has a compatible FRD baseline")
     destination = _directory(output_dir, create=True)
     _require_separate_output(destination, opn_path, frd_path)
     written = []
-    for stem in sorted(opn):
-        featured = _join_library_group(opn[stem])
-        clean = _join_library_group(frd[stem])
+    for pair in pairs:
+        featured_variation = Path(pair["featured"]).stem
+        clean_variation = Path(pair["clean"]).stem
+        featured = _join_library_group(opn[featured_variation])
+        clean = _join_library_group(frd[clean_variation])
         delta = subtract_payloads(
             featured, clean,
-            featured_label=f"OPN/{stem}",
-            clean_label=f"FRD/{stem}",
+            featured_label=f"OPN/{featured_variation}",
+            clean_label=f"FRD/{clean_variation}",
         )
         written.append(
-            save_grim_atomic(delta, destination / f"{stem}.grim", overwrite=overwrite)
+            save_grim_atomic(
+                delta, destination / pair["delta_name"], overwrite=overwrite
+            )
         )
-    return BatchResult(tuple(written))
+    warnings = tuple(
+        f"{Path(item['path']).name}: {item['reason']}" for item in unmatched
+    )
+    return BatchResult(tuple(written), warnings=warnings)
 
 
 def rename_files(

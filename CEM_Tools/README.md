@@ -21,6 +21,7 @@ On another workstation or HPC system, point to that project's folder:
 
 ```bash
 export GRIM_REVISED_2_PATH=/path/to/GRIM_Revised_2
+export CEM_SOLVER_BACKEND_PATH=/path/to/solver-project/Backend
 ```
 
 ## Headless/HPC use
@@ -54,6 +55,12 @@ Add `--overwrite` only when existing outputs should be replaced.
   fields. It requires the current solver's explicit canonical 2D phase,
   amplitude, field-domain, and sigma/dBke metadata; legacy ambiguous files are
   rejected instead of being silently mislabeled as placement-ready deltas.
+- OPN/FRD pairing uses the solver's canonical shared matcher. Studies must
+  match, and every FRD parameter must occur with the same value in the OPN.
+  The OPN may contain additional feature-only variables, allowing one clean
+  FRD baseline to serve many featured cases. The most-specific compatible FRD
+  wins; equally specific alternatives are rejected as ambiguous. Subtraction
+  inputs require final `_OPN` and `_FRD` filename markers.
 - Input files are matched from underscore-separated filename tokens.
   Polarizations recognized are VV, HH, VH, HV, TM and TE; frequency tokens
   such as `3GHz` or `0.0100GHz` are recognized wherever they appear.
