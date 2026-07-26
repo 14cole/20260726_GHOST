@@ -47,6 +47,7 @@ are preserved in ``polarization_alias_primary``.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -294,14 +295,22 @@ def join_grims(paths: Sequence[str], out_path: str, *, history: str = "") -> str
 
 def pair_variants(paths: Sequence[str]
                   ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Match OPN with FRD by base name.
+    """Match each OPN to the most-specific compatible FRD.
 
     Returns (pairs, unmatched).  Each pair is
     {base, study, params, decimals, featured, clean, delta_name}; unmatched
     entries carry the reason, because a lone OPN or FRD is the most common
     reason an automated library comes out short.
+
+    Compatibility means that the study IDs match and every FRD parameter
+    key/value is present in the OPN. One baseline FRD may therefore serve many
+    OPN cases that carry additional feature-only variables. An exact or more
+    specific baseline wins over a broader one. Equal-specificity ambiguity is
+    refused instead of being resolved by filename order.
     """
-    byrole: Dict[str, Dict[str, str]] = {ROLE_FEATURED: {}, ROLE_CLEAN: {}}
+    byrole: Dict[str, Dict[str, Dict[str, Any]]] = {
+        ROLE_FEATURED: {}, ROLE_CLEAN: {}
+    }
     others: List[Dict[str, Any]] = []
     for p in sorted(paths):
         base, role = parse_variation(p)
@@ -311,21 +320,67 @@ def pair_variants(paths: Sequence[str]
             continue
         if base in byrole[role]:
             raise ValueError(f"two {role} files for {base}: "
-                             f"{os.path.basename(byrole[role][base])} and "
+                             f"{os.path.basename(byrole[role][base]['path'])} and "
                              f"{os.path.basename(str(p))}.")
-        byrole[role][base] = str(p)
+        study, params, decimals = parse_base(base)
+        byrole[role][base] = {
+            "path": str(p), "base": base, "study": study,
+            "params": params, "decimals": decimals,
+        }
 
     pairs: List[Dict[str, Any]] = []
-    for base in sorted(set(byrole[ROLE_FEATURED]) | set(byrole[ROLE_CLEAN])):
-        feat = byrole[ROLE_FEATURED].get(base)
-        clean = byrole[ROLE_CLEAN].get(base)
-        if feat is None or clean is None:
-            others.append({"path": feat or clean, "base": base,
-                           "reason": f"no matching "
-                                     f"{ROLE_CLEAN if feat else ROLE_FEATURED} file"})
+    used_clean: set[str] = set()
+    for base, featured in sorted(byrole[ROLE_FEATURED].items()):
+        compatible = []
+        for clean in byrole[ROLE_CLEAN].values():
+            if clean["study"] != featured["study"]:
+                continue
+            if all(
+                key in featured["params"]
+                and math.isclose(
+                    float(featured["params"][key]), float(value),
+                    rel_tol=0.0, abs_tol=1e-15,
+                )
+                for key, value in clean["params"].items()
+            ):
+                compatible.append(clean)
+        if not compatible:
+            others.append({
+                "path": featured["path"], "base": base,
+                "reason": "no compatible FRD whose parameters are a subset "
+                          "of this OPN",
+            })
             continue
-        study, params, decs = parse_base(base)
-        pairs.append({"base": base, "study": study, "params": params,
-                      "decimals": decs, "featured": feat, "clean": clean,
-                      "delta_name": variation_name(base)})
+        specificity = max(len(clean["params"]) for clean in compatible)
+        best = [
+            clean for clean in compatible
+            if len(clean["params"]) == specificity
+        ]
+        if len(best) != 1:
+            candidates = [
+                clean["base"] + "_FRD"
+                for clean in sorted(best, key=lambda item: item["base"])
+            ]
+            raise ValueError(
+                f"{base}_OPN has ambiguous equally-specific FRD baselines: "
+                f"{candidates}"
+            )
+        clean = best[0]
+        used_clean.add(clean["base"])
+        pairs.append({
+            "base": base,
+            "study": featured["study"],
+            "params": featured["params"],
+            "decimals": featured["decimals"],
+            "featured": featured["path"],
+            "clean": clean["path"],
+            "clean_base": clean["base"],
+            "delta_name": variation_name(base),
+        })
+    for base, clean in sorted(byrole[ROLE_CLEAN].items()):
+        if base not in used_clean:
+            others.append({
+                "path": clean["path"], "base": base,
+                "reason": "FRD is not used by any compatible OPN",
+            })
     return pairs, others
