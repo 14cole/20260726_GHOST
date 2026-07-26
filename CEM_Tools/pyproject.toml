@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cem-tools"
+version = "0.1.0"
+description = "Headless and PySide6 tools for solver-compatible GRIM datasets"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "PySide6>=6.5"]
+
+[project.scripts]
+cem-tools = "cem_tools.cli:main"
+cem-tools-gui = "cem_tools.gui:run_gui"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cem_tools*"]
