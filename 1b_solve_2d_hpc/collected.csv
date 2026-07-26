@@ -1,0 +1,7 @@
+variation,role,n_files,polarizations,frequencies_GHz
+SEAL-00-01_0.006gap_FRD,FRD,4,HH VV,3 6
+SEAL-00-01_0.006gap_OPN,OPN,4,HH VV,3 6
+SEAL-00-01_0.010gap_FRD,FRD,4,HH VV,3 6
+SEAL-00-01_0.010gap_OPN,OPN,4,HH VV,3 6
+SEAL-00-01_0.017gap_FRD,FRD,4,HH VV,3 6
+SEAL-00-01_0.017gap_OPN,OPN,4,HH VV,3 6
